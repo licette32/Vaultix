@@ -5,12 +5,10 @@ on:
     branches: [ main, develop ]
     paths:
       - 'apps/onchain/**'
-      - '.github/workflows/contract-ci.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'apps/onchain/**'
-      - '.github/workflows/contract-ci.yml'
 
 jobs:
   test:
