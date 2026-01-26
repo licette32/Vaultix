@@ -9,51 +9,81 @@ import {
 describe('EscrowStateMachine', () => {
   describe('canTransition', () => {
     it('should allow PENDING -> ACTIVE', () => {
-      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.ACTIVE)).toBe(true);
+      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.ACTIVE)).toBe(
+        true,
+      );
     });
 
     it('should allow PENDING -> CANCELLED', () => {
-      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.CANCELLED)).toBe(true);
+      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.CANCELLED)).toBe(
+        true,
+      );
     });
 
     it('should allow ACTIVE -> COMPLETED', () => {
-      expect(canTransition(EscrowStatus.ACTIVE, EscrowStatus.COMPLETED)).toBe(true);
+      expect(canTransition(EscrowStatus.ACTIVE, EscrowStatus.COMPLETED)).toBe(
+        true,
+      );
     });
 
     it('should allow ACTIVE -> CANCELLED', () => {
-      expect(canTransition(EscrowStatus.ACTIVE, EscrowStatus.CANCELLED)).toBe(true);
+      expect(canTransition(EscrowStatus.ACTIVE, EscrowStatus.CANCELLED)).toBe(
+        true,
+      );
     });
 
     it('should allow ACTIVE -> DISPUTED', () => {
-      expect(canTransition(EscrowStatus.ACTIVE, EscrowStatus.DISPUTED)).toBe(true);
+      expect(canTransition(EscrowStatus.ACTIVE, EscrowStatus.DISPUTED)).toBe(
+        true,
+      );
     });
 
     it('should allow DISPUTED -> COMPLETED', () => {
-      expect(canTransition(EscrowStatus.DISPUTED, EscrowStatus.COMPLETED)).toBe(true);
+      expect(canTransition(EscrowStatus.DISPUTED, EscrowStatus.COMPLETED)).toBe(
+        true,
+      );
     });
 
     it('should allow DISPUTED -> CANCELLED', () => {
-      expect(canTransition(EscrowStatus.DISPUTED, EscrowStatus.CANCELLED)).toBe(true);
+      expect(canTransition(EscrowStatus.DISPUTED, EscrowStatus.CANCELLED)).toBe(
+        true,
+      );
     });
 
     it('should not allow transitions from COMPLETED', () => {
-      expect(canTransition(EscrowStatus.COMPLETED, EscrowStatus.PENDING)).toBe(false);
-      expect(canTransition(EscrowStatus.COMPLETED, EscrowStatus.ACTIVE)).toBe(false);
-      expect(canTransition(EscrowStatus.COMPLETED, EscrowStatus.CANCELLED)).toBe(false);
+      expect(canTransition(EscrowStatus.COMPLETED, EscrowStatus.PENDING)).toBe(
+        false,
+      );
+      expect(canTransition(EscrowStatus.COMPLETED, EscrowStatus.ACTIVE)).toBe(
+        false,
+      );
+      expect(
+        canTransition(EscrowStatus.COMPLETED, EscrowStatus.CANCELLED),
+      ).toBe(false);
     });
 
     it('should not allow transitions from CANCELLED', () => {
-      expect(canTransition(EscrowStatus.CANCELLED, EscrowStatus.PENDING)).toBe(false);
-      expect(canTransition(EscrowStatus.CANCELLED, EscrowStatus.ACTIVE)).toBe(false);
-      expect(canTransition(EscrowStatus.CANCELLED, EscrowStatus.COMPLETED)).toBe(false);
+      expect(canTransition(EscrowStatus.CANCELLED, EscrowStatus.PENDING)).toBe(
+        false,
+      );
+      expect(canTransition(EscrowStatus.CANCELLED, EscrowStatus.ACTIVE)).toBe(
+        false,
+      );
+      expect(
+        canTransition(EscrowStatus.CANCELLED, EscrowStatus.COMPLETED),
+      ).toBe(false);
     });
 
     it('should not allow PENDING -> COMPLETED directly', () => {
-      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.COMPLETED)).toBe(false);
+      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.COMPLETED)).toBe(
+        false,
+      );
     });
 
     it('should not allow PENDING -> DISPUTED directly', () => {
-      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.DISPUTED)).toBe(false);
+      expect(canTransition(EscrowStatus.PENDING, EscrowStatus.DISPUTED)).toBe(
+        false,
+      );
     });
   });
 

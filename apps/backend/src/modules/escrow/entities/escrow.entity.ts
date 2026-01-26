@@ -72,7 +72,9 @@ export class Escrow {
   @OneToMany(() => Party, (party) => party.escrow, { cascade: true })
   parties: Party[];
 
-  @OneToMany(() => Condition, (condition) => condition.escrow, { cascade: true })
+  @OneToMany(() => Condition, (condition) => condition.escrow, {
+    cascade: true,
+  })
   conditions: Condition[];
 
   @OneToMany(() => EscrowEvent, (event) => event.escrow, { cascade: true })

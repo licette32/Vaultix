@@ -23,7 +23,9 @@ export class Condition {
   @Column()
   escrowId: string;
 
-  @ManyToOne(() => Escrow, (escrow) => escrow.conditions, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Escrow, (escrow) => escrow.conditions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'escrowId' })
   escrow: Escrow;
 

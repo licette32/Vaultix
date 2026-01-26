@@ -5,14 +5,27 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { EscrowService } from '../services/escrow.service';
+import { Escrow } from '../entities/escrow.entity';
+
+interface AuthUser {
+  sub: string;
+  walletAddress: string;
+}
+
+interface AuthenticatedRequest extends Request {
+  user?: AuthUser;
+  params: { id?: string };
+  escrow?: Escrow;
+}
 
 @Injectable()
 export class EscrowAccessGuard implements CanActivate {
   constructor(private escrowService: EscrowService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.user;
     const escrowId = request.params.id;
 

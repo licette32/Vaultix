@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Escrow, EscrowStatus } from '../entities/escrow.entity';
-import { Party } from '../entities/party.entity';
+import { Party, PartyRole } from '../entities/party.entity';
 import { Condition } from '../entities/condition.entity';
 import { EscrowEvent, EscrowEventType } from '../entities/escrow-event.entity';
 import { CreateEscrowDto } from '../dto/create-escrow.dto';
@@ -90,10 +90,9 @@ export class EscrowService {
       .createQueryBuilder('escrow')
       .leftJoinAndSelect('escrow.parties', 'party')
       .leftJoinAndSelect('escrow.conditions', 'condition')
-      .where(
-        '(escrow.creatorId = :userId OR party.userId = :userId)',
-        { userId },
-      );
+      .where('(escrow.creatorId = :userId OR party.userId = :userId)', {
+        userId,
+      });
 
     if (query.status) {
       qb.andWhere('escrow.status = :status', { status: query.status });
@@ -194,7 +193,7 @@ export class EscrowService {
       }
     } else if (escrow.status === EscrowStatus.ACTIVE) {
       const arbitrator = escrow.parties?.find(
-        (p) => p.role === 'arbitrator' && p.userId === userId,
+        (p) => p.role === PartyRole.ARBITRATOR && p.userId === userId,
       );
       if (!arbitrator && escrow.creatorId !== userId) {
         throw new ForbiddenException(
@@ -218,7 +217,10 @@ export class EscrowService {
     return this.findOne(id);
   }
 
-  async isUserPartyToEscrow(escrowId: string, userId: string): Promise<boolean> {
+  async isUserPartyToEscrow(
+    escrowId: string,
+    userId: string,
+  ): Promise<boolean> {
     const escrow = await this.escrowRepository.findOne({
       where: { id: escrowId },
       relations: ['parties'],

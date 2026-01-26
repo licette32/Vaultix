@@ -1,11 +1,4 @@
-import {
-  IsString,
-  IsOptional,
-  IsInt,
-  Min,
-  Max,
-  IsEnum,
-} from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 import { EscrowStatus, EscrowType } from '../entities/escrow.entity';
 import { PartyRole } from '../entities/party.entity';

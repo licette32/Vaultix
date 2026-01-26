@@ -10,6 +10,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { Request as ExpressRequest } from 'express';
 import { AuthGuard } from '../../auth/middleware/auth.guard';
 import { EscrowAccessGuard } from '../guards/escrow-access.guard';
 import { EscrowService } from '../services/escrow.service';
@@ -18,20 +19,30 @@ import { UpdateEscrowDto } from '../dto/update-escrow.dto';
 import { ListEscrowsDto } from '../dto/list-escrows.dto';
 import { CancelEscrowDto } from '../dto/cancel-escrow.dto';
 
+interface AuthenticatedRequest extends ExpressRequest {
+  user: { sub: string; walletAddress: string };
+}
+
 @Controller('escrows')
 @UseGuards(ThrottlerGuard, AuthGuard)
 export class EscrowController {
   constructor(private readonly escrowService: EscrowService) {}
 
   @Post()
-  async create(@Body() dto: CreateEscrowDto, @Request() req: any) {
+  async create(
+    @Body() dto: CreateEscrowDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
     const userId = req.user.sub;
-    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.create(dto, userId, ipAddress);
   }
 
   @Get()
-  async findAll(@Query() query: ListEscrowsDto, @Request() req: any) {
+  async findAll(
+    @Query() query: ListEscrowsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
     const userId = req.user.sub;
     return this.escrowService.findAll(userId, query);
   }
@@ -47,10 +58,10 @@ export class EscrowController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateEscrowDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
     const userId = req.user.sub;
-    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.update(id, dto, userId, ipAddress);
   }
 
@@ -59,10 +70,10 @@ export class EscrowController {
   async cancel(
     @Param('id') id: string,
     @Body() dto: CancelEscrowDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
     const userId = req.user.sub;
-    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const ipAddress = req.ip || req.socket?.remoteAddress;
     return this.escrowService.cancel(id, dto, userId, ipAddress);
   }
 }

@@ -32,7 +32,5 @@ export function validateTransition(
 }
 
 export function isTerminalStatus(status: EscrowStatus): boolean {
-  return (
-    status === EscrowStatus.COMPLETED || status === EscrowStatus.CANCELLED
-  );
+  return status === EscrowStatus.COMPLETED || status === EscrowStatus.CANCELLED;
 }

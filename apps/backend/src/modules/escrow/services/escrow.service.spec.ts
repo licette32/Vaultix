@@ -1,13 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, UpdateResult } from 'typeorm';
 import { EscrowService } from './escrow.service';
 import { Escrow, EscrowStatus, EscrowType } from '../entities/escrow.entity';
 import { Party, PartyRole, PartyStatus } from '../entities/party.entity';
 import { Condition, ConditionType } from '../entities/condition.entity';
-import { EscrowEvent, EscrowEventType } from '../entities/escrow-event.entity';
+import { EscrowEvent } from '../entities/escrow-event.entity';
 import { CreateEscrowDto } from '../dto/create-escrow.dto';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 
 describe('EscrowService', () => {
   let service: EscrowService;
@@ -109,10 +113,10 @@ describe('EscrowService', () => {
       const result = await service.create(createDto, 'user-123');
 
       expect(result).toBeDefined();
-      expect(escrowRepository.create).toHaveBeenCalled();
-      expect(escrowRepository.save).toHaveBeenCalled();
-      expect(partyRepository.save).toHaveBeenCalled();
-      expect(eventRepository.save).toHaveBeenCalled();
+      expect(escrowRepository.create.mock.calls.length).toBeGreaterThan(0);
+      expect(escrowRepository.save.mock.calls.length).toBeGreaterThan(0);
+      expect(partyRepository.save.mock.calls.length).toBeGreaterThan(0);
+      expect(eventRepository.save.mock.calls.length).toBeGreaterThan(0);
     });
 
     it('should create an escrow with conditions', async () => {
@@ -120,7 +124,9 @@ describe('EscrowService', () => {
         title: 'Test Escrow',
         amount: 100,
         parties: [{ userId: 'user-456', role: PartyRole.SELLER }],
-        conditions: [{ description: 'Delivery confirmed', type: ConditionType.MANUAL }],
+        conditions: [
+          { description: 'Delivery confirmed', type: ConditionType.MANUAL },
+        ],
       };
 
       escrowRepository.create.mockReturnValue(mockEscrow as Escrow);
@@ -136,7 +142,7 @@ describe('EscrowService', () => {
       const result = await service.create(createDto, 'user-123');
 
       expect(result).toBeDefined();
-      expect(conditionRepository.save).toHaveBeenCalled();
+      expect(conditionRepository.save.mock.calls.length).toBeGreaterThan(0);
     });
   });
 
@@ -147,29 +153,42 @@ describe('EscrowService', () => {
       const result = await service.findOne('escrow-123');
 
       expect(result).toEqual(mockEscrow);
-      expect(escrowRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'escrow-123' },
-        relations: ['parties', 'conditions', 'events', 'creator'],
-      });
+      expect(escrowRepository.findOne.mock.calls[0]).toEqual([
+        {
+          where: { id: 'escrow-123' },
+          relations: ['parties', 'conditions', 'events', 'creator'],
+        },
+      ]);
     });
 
     it('should throw NotFoundException if escrow not found', async () => {
       escrowRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findOne('non-existent')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('non-existent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('update', () => {
     it('should update an escrow in pending status by creator', async () => {
       escrowRepository.findOne.mockResolvedValue(mockEscrow as Escrow);
-      escrowRepository.update.mockResolvedValue({ affected: 1 } as any);
+      escrowRepository.update.mockResolvedValue({
+        affected: 1,
+      } as UpdateResult);
       eventRepository.create.mockReturnValue({} as EscrowEvent);
       eventRepository.save.mockResolvedValue({} as EscrowEvent);
 
-      const result = await service.update('escrow-123', { title: 'Updated Title' }, 'user-123');
+      await service.update(
+        'escrow-123',
+        { title: 'Updated Title' },
+        'user-123',
+      );
 
-      expect(escrowRepository.update).toHaveBeenCalledWith('escrow-123', { title: 'Updated Title' });
+      expect(escrowRepository.update.mock.calls[0]).toEqual([
+        'escrow-123',
+        { title: 'Updated Title' },
+      ]);
     });
 
     it('should throw ForbiddenException if not creator', async () => {
@@ -195,15 +214,22 @@ describe('EscrowService', () => {
   describe('cancel', () => {
     it('should cancel a pending escrow by creator', async () => {
       escrowRepository.findOne.mockResolvedValue(mockEscrow as Escrow);
-      escrowRepository.update.mockResolvedValue({ affected: 1 } as any);
+      escrowRepository.update.mockResolvedValue({
+        affected: 1,
+      } as UpdateResult);
       eventRepository.create.mockReturnValue({} as EscrowEvent);
       eventRepository.save.mockResolvedValue({} as EscrowEvent);
 
-      const result = await service.cancel('escrow-123', { reason: 'Changed mind' }, 'user-123');
+      await service.cancel(
+        'escrow-123',
+        { reason: 'Changed mind' },
+        'user-123',
+      );
 
-      expect(escrowRepository.update).toHaveBeenCalledWith('escrow-123', {
-        status: EscrowStatus.CANCELLED,
-      });
+      expect(escrowRepository.update.mock.calls[0]).toEqual([
+        'escrow-123',
+        { status: EscrowStatus.CANCELLED },
+      ]);
     });
 
     it('should throw BadRequestException if escrow is already completed', async () => {
@@ -230,7 +256,10 @@ describe('EscrowService', () => {
     it('should return true if user is creator', async () => {
       escrowRepository.findOne.mockResolvedValue(mockEscrow as Escrow);
 
-      const result = await service.isUserPartyToEscrow('escrow-123', 'user-123');
+      const result = await service.isUserPartyToEscrow(
+        'escrow-123',
+        'user-123',
+      );
 
       expect(result).toBe(true);
     });
@@ -242,7 +271,10 @@ describe('EscrowService', () => {
         parties: [{ userId: 'user-123' }],
       } as Escrow);
 
-      const result = await service.isUserPartyToEscrow('escrow-123', 'user-123');
+      const result = await service.isUserPartyToEscrow(
+        'escrow-123',
+        'user-123',
+      );
 
       expect(result).toBe(true);
     });
@@ -254,7 +286,10 @@ describe('EscrowService', () => {
         parties: [{ userId: 'other-user' }],
       } as Escrow);
 
-      const result = await service.isUserPartyToEscrow('escrow-123', 'user-123');
+      const result = await service.isUserPartyToEscrow(
+        'escrow-123',
+        'user-123',
+      );
 
       expect(result).toBe(false);
     });
@@ -262,7 +297,10 @@ describe('EscrowService', () => {
     it('should return false if escrow not found', async () => {
       escrowRepository.findOne.mockResolvedValue(null);
 
-      const result = await service.isUserPartyToEscrow('non-existent', 'user-123');
+      const result = await service.isUserPartyToEscrow(
+        'non-existent',
+        'user-123',
+      );
 
       expect(result).toBe(false);
     });
