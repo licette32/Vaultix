@@ -135,6 +135,21 @@ impl VaultixEscrow {
         Ok(())
     }
 
+    /// Retrieves escrow details (read-only)
+    pub fn get_escrow(env: Env, escrow_id: u64) -> Result<Escrow, Error> {
+        let storage_key = get_storage_key(escrow_id);
+        env.storage()
+            .persistent()
+            .get(&storage_key)
+            .ok_or(Error::EscrowNotFound)
+    }
+
+    /// Read-only helper to fetch escrow status
+    pub fn get_state(env: Env, escrow_id: u64) -> Result<EscrowStatus, Error> {
+        let escrow = Self::get_escrow(env, escrow_id)?;
+        Ok(escrow.status)
+    }
+
     /// Releases a specific milestone payment to the recipient.
     ///
     /// # Arguments
@@ -276,24 +291,6 @@ impl VaultixEscrow {
         env.storage().persistent().set(&storage_key, &escrow);
 
         Ok(())
-    }
-
-    /// Retrieves escrow details.
-    ///
-    /// # Arguments
-    /// * `escrow_id` - Identifier of the escrow
-    ///
-    /// # Returns
-    /// The complete Escrow struct
-    ///
-    /// # Errors
-    /// * `EscrowNotFound` - If escrow doesn't exist
-    pub fn get_escrow(env: Env, escrow_id: u64) -> Result<Escrow, Error> {
-        let storage_key = get_storage_key(escrow_id);
-        env.storage()
-            .persistent()
-            .get(&storage_key)
-            .ok_or(Error::EscrowNotFound)
     }
 
     /// Cancels an escrow before any milestones are released.
