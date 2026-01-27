@@ -57,7 +57,7 @@
               "function_name": "create_escrow",
               "args": [
                 {
-                  "u64": "1"
+                  "u64": "14"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -82,7 +82,7 @@
                             "symbol": "description"
                           },
                           "val": {
-                            "symbol": "Design"
+                            "symbol": "Phase1"
                           }
                         },
                         {
@@ -106,7 +106,7 @@
                             "symbol": "amount"
                           },
                           "val": {
-                            "i128": "3000"
+                            "i128": "7000"
                           }
                         },
                         {
@@ -114,39 +114,7 @@
                             "symbol": "description"
                           },
                           "val": {
-                            "symbol": "Dev"
-                          }
-                        },
-                        {
-                          "key": {
-                            "symbol": "status"
-                          },
-                          "val": {
-                            "vec": [
-                              {
-                                "symbol": "Pending"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "map": [
-                        {
-                          "key": {
-                            "symbol": "amount"
-                          },
-                          "val": {
-                            "i128": "4000"
-                          }
-                        },
-                        {
-                          "key": {
-                            "symbol": "description"
-                          },
-                          "val": {
-                            "symbol": "Deploy"
+                            "symbol": "Phase2"
                           }
                         },
                         {
@@ -196,9 +164,6 @@
         }
       ]
     ],
-    [],
-    [],
-    [],
     []
   ],
   "ledger": {
@@ -265,7 +230,7 @@
                     "symbol": "escrow"
                   },
                   {
-                    "u64": "1"
+                    "u64": "14"
                   }
                 ]
               },
@@ -301,7 +266,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "symbol": "Design"
+                                "symbol": "Phase1"
                               }
                             },
                             {
@@ -325,7 +290,7 @@
                                 "symbol": "amount"
                               },
                               "val": {
-                                "i128": "3000"
+                                "i128": "7000"
                               }
                             },
                             {
@@ -333,39 +298,7 @@
                                 "symbol": "description"
                               },
                               "val": {
-                                "symbol": "Dev"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "status"
-                              },
-                              "val": {
-                                "vec": [
-                                  {
-                                    "symbol": "Pending"
-                                  }
-                                ]
-                              }
-                            }
-                          ]
-                        },
-                        {
-                          "map": [
-                            {
-                              "key": {
-                                "symbol": "amount"
-                              },
-                              "val": {
-                                "i128": "4000"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "description"
-                              },
-                              "val": {
-                                "symbol": "Deploy"
+                                "symbol": "Phase2"
                               }
                             },
                             {

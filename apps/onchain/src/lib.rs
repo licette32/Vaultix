@@ -1,9 +1,9 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env, Symbol,
+    Vec,
 };
 
-// Milestone status tracking
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MilestoneStatus {
@@ -12,7 +12,6 @@ pub enum MilestoneStatus {
     Disputed,
 }
 
-// Individual milestone in an escrow
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Milestone {
@@ -21,7 +20,6 @@ pub struct Milestone {
     pub description: Symbol,
 }
 
-// Overall escrow status
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EscrowStatus {
@@ -32,7 +30,6 @@ pub enum EscrowStatus {
     Resolved,
 }
 
-// Dispute resolution outcome
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Resolution {
@@ -41,7 +38,6 @@ pub enum Resolution {
     Recipient,
 }
 
-// Main escrow structure
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Escrow {
@@ -50,11 +46,11 @@ pub struct Escrow {
     pub total_amount: i128,
     pub total_released: i128,
     pub milestones: Vec<Milestone>,
+    pub token: Address,
     pub status: EscrowStatus,
     pub resolution: Resolution,
 }
 
-// Contract error types
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Error {
@@ -68,11 +64,14 @@ pub enum Error {
     InsufficientBalance = 8,
     EscrowNotActive = 9,
     VectorTooLarge = 10,
-    AdminNotInitialized = 11,
-    AlreadyInitialized = 12,
-    InvalidEscrowStatus = 13,
-    AlreadyInDispute = 14,
-    InvalidWinner = 15,
+    ZeroAmount = 11,
+    InvalidDeadline = 12,
+    SelfDealing = 13,
+    AdminNotInitialized = 14,
+    AlreadyInitialized = 15,
+    InvalidEscrowStatus = 16,
+    AlreadyInDispute = 17,
+    InvalidWinner = 18,
 }
 
 #[contract]
@@ -92,37 +91,27 @@ impl VaultixEscrow {
     }
 
     /// Creates a new escrow with milestone-based payment releases.
-    ///
-    /// # Arguments
-    /// * `escrow_id` - Unique identifier for the escrow
-    /// * `depositor` - Address funding the escrow
-    /// * `recipient` - Address receiving milestone payments
-    /// * `milestones` - Vector of milestones defining payment schedule
-    ///
-    /// # Errors
-    /// * `EscrowAlreadyExists` - If escrow_id is already in use
-    /// * `VectorTooLarge` - If more than 20 milestones provided
-    /// * `InvalidMilestoneAmount` - If any milestone amount is zero or negative
     pub fn create_escrow(
         env: Env,
         escrow_id: u64,
         depositor: Address,
         recipient: Address,
         milestones: Vec<Milestone>,
+        token: Address,
     ) -> Result<(), Error> {
-        // Authenticate the depositor
         depositor.require_auth();
 
-        // Check if escrow already exists
+        if depositor == recipient {
+            return Err(Error::SelfDealing);
+        }
+
         let storage_key = get_storage_key(escrow_id);
         if env.storage().persistent().has(&storage_key) {
             return Err(Error::EscrowAlreadyExists);
         }
 
-        // Validate milestones and calculate total
         let total_amount = validate_milestones(&milestones)?;
 
-        // Initialize all milestones to Pending status
         let mut initialized_milestones = Vec::new(&env);
         for milestone in milestones.iter() {
             let mut m = milestone.clone();
@@ -130,80 +119,142 @@ impl VaultixEscrow {
             initialized_milestones.push_back(m);
         }
 
-        // Create the escrow
         let escrow = Escrow {
             depositor: depositor.clone(),
             recipient,
             total_amount,
             total_released: 0,
             milestones: initialized_milestones,
+            token: token.clone(),
             status: EscrowStatus::Active,
             resolution: Resolution::None,
         };
 
-        // Save to persistent storage
         env.storage().persistent().set(&storage_key, &escrow);
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&depositor, env.current_contract_address(), &total_amount);
 
         Ok(())
     }
 
-    /// Releases a specific milestone payment to the recipient.
-    ///
-    /// # Arguments
-    /// * `escrow_id` - Identifier of the escrow
-    /// * `milestone_index` - Index of the milestone to release
-    ///
-    /// # Errors
-    /// * `EscrowNotFound` - If escrow doesn't exist
-    /// * `UnauthorizedAccess` - If caller is not the depositor
-    /// * `EscrowNotActive` - If escrow is completed or cancelled
-    /// * `MilestoneNotFound` - If index is out of bounds
-    /// * `MilestoneAlreadyReleased` - If milestone was already released
+    /// Retrieves escrow details (read-only)
+    pub fn get_escrow(env: Env, escrow_id: u64) -> Result<Escrow, Error> {
+        let storage_key = get_storage_key(escrow_id);
+        env.storage()
+            .persistent()
+            .get(&storage_key)
+            .ok_or(Error::EscrowNotFound)
+    }
+
+    /// Read-only helper to fetch escrow status
+    pub fn get_state(env: Env, escrow_id: u64) -> Result<EscrowStatus, Error> {
+        let escrow = Self::get_escrow(env, escrow_id)?;
+        Ok(escrow.status)
+    }
+
+    /// Releases a specific milestone payment to the recipient (depositor-driven path).
     pub fn release_milestone(env: Env, escrow_id: u64, milestone_index: u32) -> Result<(), Error> {
         let storage_key = get_storage_key(escrow_id);
 
-        // Load escrow from storage
         let mut escrow: Escrow = env
             .storage()
             .persistent()
             .get(&storage_key)
             .ok_or(Error::EscrowNotFound)?;
 
-        // Verify authorization
         escrow.depositor.require_auth();
 
-        // Check escrow is active
         if escrow.status != EscrowStatus::Active {
             return Err(Error::EscrowNotActive);
         }
 
-        // Verify milestone index is valid
         if milestone_index >= escrow.milestones.len() {
             return Err(Error::MilestoneNotFound);
         }
 
-        // Get the milestone
         let mut milestone = escrow
             .milestones
             .get(milestone_index)
             .ok_or(Error::MilestoneNotFound)?;
 
-        // Check if already released
         if milestone.status == MilestoneStatus::Released {
             return Err(Error::MilestoneAlreadyReleased);
         }
 
-        // Update milestone status
         milestone.status = MilestoneStatus::Released;
         escrow.milestones.set(milestone_index, milestone.clone());
 
-        // Update total released with overflow protection
         escrow.total_released = escrow
             .total_released
             .checked_add(milestone.amount)
             .ok_or(Error::InvalidMilestoneAmount)?;
 
-        // Save updated escrow
+        let token_client = token::Client::new(&env, &escrow.token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &escrow.recipient,
+            &milestone.amount,
+        );
+
+        env.storage().persistent().set(&storage_key, &escrow);
+
+        Ok(())
+    }
+
+    /// Buyer confirms delivery and releases a milestone to the recipient (buyer-driven path).
+    pub fn confirm_delivery(
+        env: Env,
+        escrow_id: u64,
+        milestone_index: u32,
+        buyer: Address,
+    ) -> Result<(), Error> {
+        let storage_key = get_storage_key(escrow_id);
+
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&storage_key)
+            .ok_or(Error::EscrowNotFound)?;
+
+        buyer.require_auth();
+
+        if escrow.depositor != buyer {
+            return Err(Error::UnauthorizedAccess);
+        }
+
+        if escrow.status != EscrowStatus::Active {
+            return Err(Error::EscrowNotActive);
+        }
+
+        if milestone_index >= escrow.milestones.len() {
+            return Err(Error::MilestoneNotFound);
+        }
+
+        let mut milestone = escrow
+            .milestones
+            .get(milestone_index)
+            .ok_or(Error::MilestoneNotFound)?;
+
+        if milestone.status == MilestoneStatus::Released {
+            return Err(Error::MilestoneAlreadyReleased);
+        }
+
+        milestone.status = MilestoneStatus::Released;
+        escrow.milestones.set(milestone_index, milestone.clone());
+
+        escrow.total_released = escrow
+            .total_released
+            .checked_add(milestone.amount)
+            .ok_or(Error::InvalidMilestoneAmount)?;
+
+        let token_client = token::Client::new(&env, &escrow.token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &escrow.recipient,
+            &milestone.amount,
+        );
+
         env.storage().persistent().set(&storage_key, &escrow);
 
         Ok(())
@@ -231,7 +282,6 @@ impl VaultixEscrow {
             return Err(Error::InvalidEscrowStatus);
         }
 
-        // Mark pending milestones as disputed to freeze further releases.
         let mut updated_milestones = Vec::new(&env);
         for milestone in escrow.milestones.iter() {
             let mut m = milestone.clone();
@@ -266,14 +316,18 @@ impl VaultixEscrow {
             return Err(Error::InvalidEscrowStatus);
         }
 
-        // Winner must be one of the parties
         if winner != escrow.depositor && winner != escrow.recipient {
             return Err(Error::InvalidWinner);
         }
 
-        // Release or refund remaining funds based on winner
+        let outstanding = escrow
+            .total_amount
+            .checked_sub(escrow.total_released)
+            .ok_or(Error::InvalidMilestoneAmount)?;
+
+        let token_client = token::Client::new(&env, &escrow.token);
+
         if winner == escrow.recipient {
-            // Force release of all pending/disputed milestones
             let mut updated_milestones = Vec::new(&env);
             for milestone in escrow.milestones.iter() {
                 let mut m = milestone.clone();
@@ -285,8 +339,15 @@ impl VaultixEscrow {
             escrow.milestones = updated_milestones;
             escrow.total_released = escrow.total_amount;
             escrow.resolution = Resolution::Recipient;
+
+            if outstanding > 0 {
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &escrow.recipient,
+                    &outstanding,
+                );
+            }
         } else {
-            // Refund remaining funds to depositor; keep already released milestones as-is
             let mut updated_milestones = Vec::new(&env);
             for milestone in escrow.milestones.iter() {
                 let mut m = milestone.clone();
@@ -297,6 +358,14 @@ impl VaultixEscrow {
             }
             escrow.milestones = updated_milestones;
             escrow.resolution = Resolution::Depositor;
+
+            if outstanding > 0 {
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &escrow.depositor,
+                    &outstanding,
+                );
+            }
         }
 
         escrow.status = EscrowStatus::Resolved;
@@ -305,33 +374,7 @@ impl VaultixEscrow {
         Ok(())
     }
 
-    /// Retrieves escrow details.
-    ///
-    /// # Arguments
-    /// * `escrow_id` - Identifier of the escrow
-    ///
-    /// # Returns
-    /// The complete Escrow struct
-    ///
-    /// # Errors
-    /// * `EscrowNotFound` - If escrow doesn't exist
-    pub fn get_escrow(env: Env, escrow_id: u64) -> Result<Escrow, Error> {
-        let storage_key = get_storage_key(escrow_id);
-        env.storage()
-            .persistent()
-            .get(&storage_key)
-            .ok_or(Error::EscrowNotFound)
-    }
-
     /// Cancels an escrow before any milestones are released.
-    ///
-    /// # Arguments
-    /// * `escrow_id` - Identifier of the escrow
-    ///
-    /// # Errors
-    /// * `EscrowNotFound` - If escrow doesn't exist
-    /// * `UnauthorizedAccess` - If caller is not the depositor
-    /// * `MilestoneAlreadyReleased` - If any milestone has been released
     pub fn cancel_escrow(env: Env, escrow_id: u64) -> Result<(), Error> {
         let storage_key = get_storage_key(escrow_id);
 
@@ -341,19 +384,16 @@ impl VaultixEscrow {
             .get(&storage_key)
             .ok_or(Error::EscrowNotFound)?;
 
-        // Verify authorization
         escrow.depositor.require_auth();
 
         if escrow.status != EscrowStatus::Active {
             return Err(Error::InvalidEscrowStatus);
         }
 
-        // Verify no milestones have been released
         if escrow.total_released > 0 {
             return Err(Error::MilestoneAlreadyReleased);
         }
 
-        // Update status
         escrow.status = EscrowStatus::Cancelled;
         env.storage().persistent().set(&storage_key, &escrow);
 
@@ -361,14 +401,6 @@ impl VaultixEscrow {
     }
 
     /// Marks an escrow as completed after all milestones are released.
-    ///
-    /// # Arguments
-    /// * `escrow_id` - Identifier of the escrow
-    ///
-    /// # Errors
-    /// * `EscrowNotFound` - If escrow doesn't exist
-    /// * `UnauthorizedAccess` - If caller is not the depositor
-    /// * `EscrowNotActive` - If not all milestones are released
     pub fn complete_escrow(env: Env, escrow_id: u64) -> Result<(), Error> {
         let storage_key = get_storage_key(escrow_id);
 
@@ -378,19 +410,16 @@ impl VaultixEscrow {
             .get(&storage_key)
             .ok_or(Error::EscrowNotFound)?;
 
-        // Verify authorization
         escrow.depositor.require_auth();
 
         if escrow.status != EscrowStatus::Active {
             return Err(Error::InvalidEscrowStatus);
         }
 
-        // Verify all milestones are released
         if !verify_all_released(&escrow.milestones) {
             return Err(Error::EscrowNotActive);
         }
 
-        // Update status
         escrow.status = EscrowStatus::Completed;
         env.storage().persistent().set(&storage_key, &escrow);
 
@@ -398,7 +427,6 @@ impl VaultixEscrow {
     }
 }
 
-// Helper function to generate storage key
 fn get_storage_key(escrow_id: u64) -> (Symbol, u64) {
     (symbol_short!("escrow"), escrow_id)
 }
@@ -414,19 +442,16 @@ fn get_admin(env: &Env) -> Result<Address, Error> {
         .ok_or(Error::AdminNotInitialized)
 }
 
-// Validates milestone vector and returns total amount
 fn validate_milestones(milestones: &Vec<Milestone>) -> Result<i128, Error> {
-    // Check vector size to prevent gas issues
     if milestones.len() > 20 {
         return Err(Error::VectorTooLarge);
     }
 
     let mut total: i128 = 0;
 
-    // Validate each milestone and calculate total
     for milestone in milestones.iter() {
         if milestone.amount <= 0 {
-            return Err(Error::InvalidMilestoneAmount);
+            return Err(Error::ZeroAmount);
         }
 
         total = total
@@ -437,7 +462,6 @@ fn validate_milestones(milestones: &Vec<Milestone>) -> Result<i128, Error> {
     Ok(total)
 }
 
-// Checks if all milestones have been released
 fn verify_all_released(milestones: &Vec<Milestone>) -> bool {
     for milestone in milestones.iter() {
         if milestone.status != MilestoneStatus::Released {
