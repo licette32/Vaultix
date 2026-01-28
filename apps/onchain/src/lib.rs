@@ -31,6 +31,14 @@ pub enum EscrowStatus {
     Cancelled,
 }
 
+// Contract-level operational state
+#[contracttype]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ContractState {
+    Active,
+    Paused,
+}
+
 // Main escrow structure
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -63,6 +71,7 @@ pub enum Error {
     ZeroAmount = 13,
     InvalidDeadline = 14,
     SelfDealing = 15,
+    ContractPaused = 16,
 }
 
 // Platform fee configuration (in basis points: 1 bps = 0.01%)
@@ -153,6 +162,21 @@ impl VaultixEscrow {
         Ok((treasury, fee_bps))
     }
 
+    /// Sets the global paused state (admin only).
+    /// When paused, state-changing user operations are blocked.
+    /// Read-only functions remain accessible.
+    pub fn set_paused(env: Env, paused: bool) -> Result<(), Error> {
+        let treasury: Address = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("treasury"))
+            .ok_or(Error::TreasuryNotInitialized)?;
+        treasury.require_auth();
+        let state = if paused { ContractState::Paused } else { ContractState::Active };
+        env.storage().instance().set(&symbol_short!("state"), &state);
+        Ok(())
+    }
+
     /// Creates a new escrow with milestone-based payment releases.
     ///
     /// # Arguments
@@ -176,6 +200,9 @@ impl VaultixEscrow {
     ) -> Result<(), Error> {
         // Authenticate the depositor
         depositor.require_auth();
+
+        // Global pause check
+        ensure_not_paused(&env)?;
 
         // Validate no self-dealing (depositor cannot be recipient)
         if depositor == recipient {
@@ -261,6 +288,9 @@ impl VaultixEscrow {
         token_address: Address,
     ) -> Result<(), Error> {
         let storage_key = get_storage_key(escrow_id);
+
+        // Global pause check
+        ensure_not_paused(&env)?;
 
         // Load escrow from storage
         let mut escrow: Escrow = env
@@ -365,6 +395,9 @@ impl VaultixEscrow {
         buyer: Address,
     ) -> Result<(), Error> {
         let storage_key = get_storage_key(escrow_id);
+
+        // Global pause check
+        ensure_not_paused(&env)?;
 
         // Load escrow from storage
         let mut escrow: Escrow = env
@@ -496,6 +529,20 @@ impl VaultixEscrow {
 // Helper function to generate storage key
 fn get_storage_key(escrow_id: u64) -> (Symbol, u64) {
     (symbol_short!("escrow"), escrow_id)
+}
+
+// Ensure contract is not paused; returns error if paused
+fn ensure_not_paused(env: &Env) -> Result<(), Error> {
+    let state: ContractState = env
+        .storage()
+        .instance()
+        .get(&symbol_short!("state"))
+        .unwrap_or(ContractState::Active);
+
+    if state == ContractState::Paused {
+        return Err(Error::ContractPaused);
+    }
+    Ok(())
 }
 
 // Validates milestone vector and returns total amount
