@@ -21,8 +21,9 @@ describe('StellarService', () => {
   });
 
   it('should validate public keys correctly', () => {
-    const validPublicKey =
-      'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IA6WNLWLFGJGUJMGHVCCC3U';
+    // Generate a valid keypair for testing
+    const keypair = StellarSdk.Keypair.random();
+    const validPublicKey = keypair.publicKey();
     const invalidPublicKey = 'invalid-key';
 
     expect(service.isValidPublicKey(validPublicKey)).toBe(true);
@@ -30,8 +31,9 @@ describe('StellarService', () => {
   });
 
   it('should validate secret keys correctly', () => {
-    const validSecretKey =
-      'SBKPP5NNI4MPLJMD6QBWUQUOKTXVVVOA7LL6QNZWKMRTPDBSRHFJ545W';
+    // Generate a valid keypair for testing
+    const keypair = StellarSdk.Keypair.random();
+    const validSecretKey = keypair.secret();
     const invalidSecretKey = 'invalid-key';
 
     expect(service.isValidSecretKey(validSecretKey)).toBe(true);
