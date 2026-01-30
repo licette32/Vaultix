@@ -10,6 +10,16 @@ fn create_test_token<'a>(env: &Env, admin: &Address) -> (token::StellarAssetClie
     (token_admin_client, token_address)
 }
 
+/// Helper function to create token client + admin + address
+fn create_token_contract<'a>(
+    env: &Env,
+    admin: &Address,
+) -> (token::Client<'a>, token::StellarAssetClient<'a>, Address) {
+    let (token_admin, token_address) = create_test_token(env, admin);
+    let token_client = token::Client::new(env, &token_address);
+    (token_client, token_admin, token_address)
+}
+
 #[test]
 fn test_create_and_get_escrow() {
     let env = Env::default();
@@ -24,9 +34,9 @@ fn test_create_and_get_escrow() {
     let escrow_id = 1u64;
 
     // Setup token
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
 
-    // Create milestones
     let milestones = vec![
         &env,
         Milestone {
@@ -48,7 +58,6 @@ fn test_create_and_get_escrow() {
 
     let deadline = 1706400000u64;
 
-    // Create escrow
     client.create_escrow(
         &escrow_id,
         &depositor,
@@ -58,7 +67,6 @@ fn test_create_and_get_escrow() {
         &deadline,
     );
 
-    // Retrieve escrow
     let escrow = client.get_escrow(&escrow_id);
     assert_eq!(escrow.depositor, depositor);
     assert_eq!(escrow.recipient, recipient);
@@ -68,6 +76,10 @@ fn test_create_and_get_escrow() {
     assert_eq!(escrow.status, EscrowStatus::Created);
     assert_eq!(escrow.milestones.len(), 3);
     assert_eq!(escrow.deadline, deadline);
+
+    assert_eq!(token_client.balance(&depositor), 10000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+    assert_eq!(token_client.balance(&recipient), 0);
 }
 
 #[test]
@@ -84,9 +96,7 @@ fn test_deposit_funds() {
     let escrow_id = 2u64;
 
     // Setup token - get admin client for minting
-    let (token_admin, token_address) = create_test_token(&env, &admin);
-    // Create regular client for other operations
-    let token_client = token::Client::new(&env, &token_address);
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
 
     let initial_balance: i128 = 20_000;
     token_admin.mint(&depositor, &initial_balance);
@@ -143,9 +153,12 @@ fn test_release_milestone_with_tokens() {
     let admin = Address::generate(&env);
     let escrow_id = 3u64;
 
+    // Initialize treasury (fee-free for test)
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
     // Setup token
-    let (token_admin, token_address) = create_test_token(&env, &admin);
-    let token_client = token::Client::new(&env, &token_address);
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
 
     token_admin.mint(&depositor, &10_000);
 
@@ -179,8 +192,8 @@ fn test_release_milestone_with_tokens() {
     assert_eq!(token_client.balance(&contract_id), 10_000);
     assert_eq!(token_client.balance(&recipient), 0);
 
-    // Buyer confirms delivery and releases first milestone
-    client.confirm_delivery(&escrow_id, &0, &depositor);
+    // Depositor releases first milestone
+    client.release_milestone(&escrow_id, &0);
 
     // Verify tokens transferred to recipient
     assert_eq!(token_client.balance(&contract_id), 4000);
@@ -197,6 +210,55 @@ fn test_release_milestone_with_tokens() {
         escrow.milestones.get(1).unwrap().status,
         MilestoneStatus::Pending
     );
+
+    assert_eq!(token_client.balance(&contract_id), 4000);
+    assert_eq!(token_client.balance(&recipient), 6000);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn test_dispute_blocks_release() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultixEscrow, ());
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let escrow_id = 9u64;
+
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &1000);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 500,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    client.create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+    );
+
+    token_client.approve(&depositor, &contract_id, &1000, &200);
+    client.deposit_funds(&escrow_id);
+
+    client.raise_dispute(&escrow_id, &depositor);
+
+    let escrow = client.get_escrow(&escrow_id);
+    assert_eq!(escrow.status, EscrowStatus::Disputed);
+
+    client.release_milestone(&escrow_id, &0);
 }
 
 #[test]
@@ -213,9 +275,7 @@ fn test_complete_escrow_with_all_releases() {
     let escrow_id = 4u64;
 
     // Setup token
-    let (token_admin, token_address) = create_test_token(&env, &admin);
-    let token_client = token::Client::new(&env, &token_address);
-
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
     token_admin.mint(&depositor, &10_000);
 
     let milestones = vec![
@@ -252,7 +312,6 @@ fn test_complete_escrow_with_all_releases() {
     assert_eq!(token_client.balance(&contract_id), 0);
     assert_eq!(token_client.balance(&recipient), 10_000);
 
-    // Complete the escrow
     client.complete_escrow(&escrow_id);
 
     let escrow = client.get_escrow(&escrow_id);
@@ -274,12 +333,8 @@ fn test_cancel_escrow_with_refund() {
     let escrow_id = 5u64;
 
     // Setup token
-    let (token_admin, token_address) = create_test_token(&env, &admin);
-    let token_client = token::Client::new(&env, &token_address);
-
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
     token_admin.mint(&depositor, &10_000);
-
-    // Create token contract and mint tokens
 
     let milestones = vec![
         &env,
@@ -359,6 +414,134 @@ fn test_cancel_unfunded_escrow() {
 }
 
 #[test]
+fn test_admin_resolves_dispute_to_recipient() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultixEscrow, ());
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let escrow_id = 10u64;
+
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
+
+    client.init(&admin);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 4000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Phase1"),
+        },
+        Milestone {
+            amount: 6000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Phase2"),
+        },
+    ];
+
+    client.create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+    );
+
+    token_client.approve(&depositor, &contract_id, &10000, &200);
+    client.deposit_funds(&escrow_id);
+
+    client.raise_dispute(&escrow_id, &recipient);
+
+    client.resolve_dispute(&escrow_id, &recipient);
+
+    let escrow = client.get_escrow(&escrow_id);
+    assert_eq!(escrow.status, EscrowStatus::Resolved);
+    assert_eq!(escrow.resolution, Resolution::Recipient);
+    assert_eq!(escrow.total_released, escrow.total_amount);
+    assert!(
+        escrow
+            .milestones
+            .iter()
+            .all(|m| m.status == MilestoneStatus::Released)
+    );
+
+    assert_eq!(token_client.balance(&recipient), 10000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+    assert_eq!(token_client.balance(&depositor), 0);
+}
+
+#[test]
+fn test_admin_resolves_dispute_to_depositor() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultixEscrow, ());
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let escrow_id = 11u64;
+
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &5000);
+
+    client.init(&admin);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 2000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Alpha"),
+        },
+        Milestone {
+            amount: 3000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Beta"),
+        },
+    ];
+
+    client.create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+    );
+
+    token_client.approve(&depositor, &contract_id, &5000, &200);
+    client.deposit_funds(&escrow_id);
+
+    client.raise_dispute(&escrow_id, &depositor);
+
+    client.resolve_dispute(&escrow_id, &depositor);
+
+    let escrow = client.get_escrow(&escrow_id);
+    assert_eq!(escrow.status, EscrowStatus::Resolved);
+    assert_eq!(escrow.resolution, Resolution::Depositor);
+    assert_eq!(escrow.total_released, 0);
+    assert!(
+        escrow
+            .milestones
+            .iter()
+            .all(|m| m.status == MilestoneStatus::Disputed)
+    );
+
+    assert_eq!(token_client.balance(&depositor), 5000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+    assert_eq!(token_client.balance(&recipient), 0);
+}
+
+#[test]
 #[should_panic(expected = "Error(Contract, #2)")]
 fn test_duplicate_escrow_id() {
     let env = Env::default();
@@ -372,7 +555,8 @@ fn test_duplicate_escrow_id() {
     let admin = Address::generate(&env);
     let escrow_id = 7u64;
 
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
 
     let milestones = vec![
         &env,
@@ -391,7 +575,6 @@ fn test_duplicate_escrow_id() {
         &milestones,
         &1706400000u64,
     );
-    // This should panic with Error #2 (EscrowAlreadyExists)
     client.create_escrow(
         &escrow_id,
         &depositor,
@@ -419,9 +602,7 @@ fn test_double_release() {
     let admin = Address::generate(&env);
     let escrow_id = 8u64;
 
-    let (token_admin, token_address) = create_test_token(&env, &admin);
-    let token_client = token::Client::new(&env, &token_address);
-
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
     token_admin.mint(&depositor, &2000); // Increased to cover fees
 
     let milestones = vec![
@@ -445,10 +626,10 @@ fn test_double_release() {
     client.deposit_funds(&escrow_id);
 
     // First release should succeed
-    client.release_milestone(&escrow_id, &0, &token_address);
+    client.release_milestone(&escrow_id, &0);
 
     // Second release should fail with MilestoneAlreadyReleased
-    let result = client.try_release_milestone(&escrow_id, &0, &token_address);
+    let result = client.try_release_milestone(&escrow_id, &0);
     assert_eq!(result, Err(Ok(Error::MilestoneAlreadyReleased)));
 }
 
@@ -466,9 +647,9 @@ fn test_too_many_milestones() {
     let admin = Address::generate(&env);
     let escrow_id = 9u64;
 
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
 
-    // Create 21 milestones (exceeds max of 20)
     let mut milestones = Vec::new(&env);
     for _i in 0..21 {
         milestones.push_back(Milestone {
@@ -478,7 +659,6 @@ fn test_too_many_milestones() {
         });
     }
 
-    // This should panic with Error #10 (VectorTooLarge)
     client.create_escrow(
         &escrow_id,
         &depositor,
@@ -503,7 +683,8 @@ fn test_invalid_milestone_amount() {
     let admin = Address::generate(&env);
     let escrow_id = 10u64;
 
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
 
     let milestones = vec![
         &env,
@@ -514,7 +695,6 @@ fn test_invalid_milestone_amount() {
         },
     ];
 
-    // This should panic with Error #11 (ZeroAmount)
     client.create_escrow(
         &escrow_id,
         &depositor,
@@ -523,6 +703,91 @@ fn test_invalid_milestone_amount() {
         &milestones,
         &1706400000u64,
     );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn test_unauthorized_confirm_delivery() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultixEscrow, ());
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let non_buyer = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let escrow_id = 9u64;
+
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&buyer, &10000);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 1000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    client.create_escrow(
+        &escrow_id,
+        &buyer,
+        &seller,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+    );
+
+    token_client.approve(&buyer, &contract_id, &1000, &200);
+    client.deposit_funds(&escrow_id);
+
+    client.confirm_delivery(&escrow_id, &0, &non_buyer);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #4)")]
+fn test_double_confirm_delivery() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultixEscrow, ());
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let escrow_id = 10u64;
+
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&buyer, &10000);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 1000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    client.create_escrow(
+        &escrow_id,
+        &buyer,
+        &seller,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+    );
+
+    token_client.approve(&buyer, &contract_id, &1000, &200);
+    client.deposit_funds(&escrow_id);
+
+    client.confirm_delivery(&escrow_id, &0, &buyer);
+
+    client.confirm_delivery(&escrow_id, &0, &buyer);
 }
 
 #[test]
@@ -537,9 +802,9 @@ fn test_zero_amount_milestone_rejected() {
     let admin = Address::generate(&env);
     let escrow_id = 11u64;
 
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
 
-    // Create milestones with one zero amount
     let milestones = vec![
         &env,
         Milestone {
@@ -549,7 +814,6 @@ fn test_zero_amount_milestone_rejected() {
         },
     ];
 
-    // Attempt to create escrow with zero amount milestone
     let result = client.try_create_escrow(
         &escrow_id,
         &depositor,
@@ -559,7 +823,6 @@ fn test_zero_amount_milestone_rejected() {
         &1706400000u64,
     );
 
-    // Assert specific error is returned
     assert_eq!(result, Err(Ok(Error::ZeroAmount)));
 }
 
@@ -575,9 +838,9 @@ fn test_negative_amount_milestone_rejected() {
     let admin = Address::generate(&env);
     let escrow_id = 12u64;
 
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
 
-    // Create milestones with negative amount
     let milestones = vec![
         &env,
         Milestone {
@@ -587,7 +850,6 @@ fn test_negative_amount_milestone_rejected() {
         },
     ];
 
-    // Attempt to create escrow
     let result = client.try_create_escrow(
         &escrow_id,
         &depositor,
@@ -597,7 +859,6 @@ fn test_negative_amount_milestone_rejected() {
         &1706400000u64,
     );
 
-    // Assert ZeroAmount error (covers negative case)
     assert_eq!(result, Err(Ok(Error::ZeroAmount)));
 }
 
@@ -612,9 +873,9 @@ fn test_self_dealing_rejected() {
     let admin = Address::generate(&env);
     let escrow_id = 13u64;
 
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&same_party, &10000);
 
-    // Create valid milestones
     let milestones = vec![
         &env,
         Milestone {
@@ -624,7 +885,6 @@ fn test_self_dealing_rejected() {
         },
     ];
 
-    // Attempt to create escrow where depositor == recipient
     let result = client.try_create_escrow(
         &escrow_id,
         &same_party,
@@ -634,7 +894,6 @@ fn test_self_dealing_rejected() {
         &1706400000u64,
     );
 
-    // Assert SelfDealing error
     assert_eq!(result, Err(Ok(Error::SelfDealing)));
 }
 
@@ -650,9 +909,9 @@ fn test_valid_escrow_creation_succeeds() {
     let admin = Address::generate(&env);
     let escrow_id = 14u64;
 
-    let (_, token_address) = create_test_token(&env, &admin);
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10000);
 
-    // Valid milestones with positive amounts
     let milestones = vec![
         &env,
         Milestone {
@@ -667,7 +926,6 @@ fn test_valid_escrow_creation_succeeds() {
         },
     ];
 
-    // Create escrow - should succeed
     let result = client.try_create_escrow(
         &escrow_id,
         &depositor,
@@ -677,10 +935,8 @@ fn test_valid_escrow_creation_succeeds() {
         &1706400000u64,
     );
 
-    // Assert success
     assert!(result.is_ok());
 
-    // Verify escrow was created correctly
     let escrow = client.get_escrow(&escrow_id);
     assert_eq!(escrow.depositor, depositor);
     assert_eq!(escrow.recipient, recipient);
@@ -702,8 +958,7 @@ fn test_double_deposit_rejected() {
     let admin = Address::generate(&env);
     let escrow_id = 15u64;
 
-    let (token_admin, token_address) = create_test_token(&env, &admin);
-    let token_client = token::Client::new(&env, &token_address);
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
 
     token_admin.mint(&depositor, &20_000);
 
@@ -768,5 +1023,5 @@ fn test_release_milestone_before_deposit() {
 
     // Try to release milestone before depositing funds
     // This should panic with Error #9 (EscrowNotActive)
-    client.release_milestone(&escrow_id, &0, &token_address);
+    client.release_milestone(&escrow_id, &0);
 }
