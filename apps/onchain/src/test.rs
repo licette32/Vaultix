@@ -659,6 +659,46 @@ fn test_initialize_contract() {
 }
 
 #[test]
+fn test_create_escrow_fails_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultixEscrow, ());
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &None);
+    client.set_paused(&true);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let escrow_id = 1_000u64;
+
+    let (token_client, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10_000);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 10_000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Work"),
+        },
+    ];
+
+    let result = client.try_create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &milestones,
+        &token_client.address,
+    );
+
+    assert_eq!(result, Err(Ok(Error::ContractPaused)));
+}
+
+#[test]
 fn test_initialize_with_custom_fee() {
     let env = Env::default();
     env.mock_all_auths();

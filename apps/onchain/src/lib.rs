@@ -172,8 +172,14 @@ impl VaultixEscrow {
             .get(&symbol_short!("treasury"))
             .ok_or(Error::TreasuryNotInitialized)?;
         treasury.require_auth();
-        let state = if paused { ContractState::Paused } else { ContractState::Active };
-        env.storage().instance().set(&symbol_short!("state"), &state);
+        let state = if paused {
+            ContractState::Paused
+        } else {
+            ContractState::Active
+        };
+        env.storage()
+            .instance()
+            .set(&symbol_short!("state"), &state);
         Ok(())
     }
 
