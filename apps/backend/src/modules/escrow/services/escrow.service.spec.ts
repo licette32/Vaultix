@@ -12,6 +12,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { EscrowStellarIntegrationService } from './escrow-stellar-integration.service';
 
 describe('EscrowService', () => {
   let service: EscrowService;
@@ -77,6 +78,12 @@ describe('EscrowService', () => {
         { provide: getRepositoryToken(Party), useValue: mockPartyRepo },
         { provide: getRepositoryToken(Condition), useValue: mockConditionRepo },
         { provide: getRepositoryToken(EscrowEvent), useValue: mockEventRepo },
+        {
+          provide: EscrowStellarIntegrationService,
+          useValue: {
+            completeOnChainEscrow: jest.fn().mockResolvedValue('mock-tx-hash'),
+          },
+        },
       ],
     }).compile();
 
