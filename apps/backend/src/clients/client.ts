@@ -11,7 +11,7 @@ declare global {
 }
 
 const api = axios.create({
-  baseURL: process.env.VITE_API_URL || 'http://localhost:3000',
+  baseURL: process.env.VITE_API_URL || 'http://localhost:3001',
   withCredentials: true,
 });
 
