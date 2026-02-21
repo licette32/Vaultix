@@ -24,7 +24,14 @@ export class AdminService {
       skip: (page - 1) * limit,
       take: limit,
       order: { createdAt: 'DESC' },
-      select: ['id', 'walletAddress', 'role', 'isActive', 'createdAt', 'updatedAt'],
+      select: [
+        'id',
+        'walletAddress',
+        'role',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+      ],
     });
 
     return {
@@ -46,7 +53,7 @@ export class AdminService {
     endDate?: string;
   }) {
     const { status, page = 1, limit = 50, startDate, endDate } = filters;
-    
+
     const where: any = {};
     if (status) where.status = status;
     if (startDate && endDate) {
@@ -85,7 +92,9 @@ export class AdminService {
       this.userRepository.count({ where: { isActive: true } }),
       this.escrowRepository.count(),
       this.escrowRepository.count({ where: { status: EscrowStatus.ACTIVE } }),
-      this.escrowRepository.count({ where: { status: EscrowStatus.COMPLETED } }),
+      this.escrowRepository.count({
+        where: { status: EscrowStatus.COMPLETED },
+      }),
       this.escrowRepository
         .createQueryBuilder('escrow')
         .select('SUM(escrow.amount)', 'total')
@@ -137,7 +146,7 @@ export class AdminService {
 
   async suspendUser(userId: string) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    
+
     if (!user) {
       throw new Error('User not found');
     }

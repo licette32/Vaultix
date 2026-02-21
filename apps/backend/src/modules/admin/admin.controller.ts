@@ -19,13 +19,16 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('escrows')
-  async getAllEscrows(@Query() query: {
-    status?: EscrowStatus;
-    page?: number;
-    limit?: number;
-    startDate?: string;
-    endDate?: string;
-  }) {
+  async getAllEscrows(
+    @Query()
+    query: {
+      status?: EscrowStatus;
+      page?: number;
+      limit?: number;
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
     return this.adminService.getAllEscrows(query);
   }
 

@@ -3,7 +3,10 @@ import { INestApplication } from '@nestjs/common';
 import supertest from 'supertest';
 import { AppModule } from '../src/app.module';
 import { getRepository, In } from 'typeorm';
-import { Escrow, EscrowStatus } from '../src/modules/escrow/entities/escrow.entity';
+import {
+  Escrow,
+  EscrowStatus,
+} from '../src/modules/escrow/entities/escrow.entity';
 import { User, UserRole } from '../src/modules/user/entities/user.entity';
 import { Party, PartyRole } from '../src/modules/escrow/entities/party.entity';
 
@@ -40,7 +43,7 @@ describe('Escrow Scheduler (e2e)', () => {
     // Clean up test data
     const escrowRepository = getRepository(Escrow);
     const partyRepository = getRepository(Party);
-    
+
     await partyRepository.delete({});
     await escrowRepository.delete({});
   });
@@ -82,10 +85,10 @@ describe('Escrow Scheduler (e2e)', () => {
       expect(response.body.message).toContain('processed manually');
 
       // Verify escrow was cancelled
-      const updatedEscrow = await escrowRepository.findOne({ 
-        where: { id: savedEscrow.id } 
+      const updatedEscrow = await escrowRepository.findOne({
+        where: { id: savedEscrow.id },
       });
-      
+
       expect(updatedEscrow?.status).toBe(EscrowStatus.CANCELLED);
       expect(updatedEscrow?.isActive).toBe(false);
     });
@@ -126,10 +129,10 @@ describe('Escrow Scheduler (e2e)', () => {
       expect(response.body.message).toContain('processed manually');
 
       // Verify escrow was escalated to dispute
-      const updatedEscrow = await escrowRepository.findOne({ 
-        where: { id: savedEscrow.id } 
+      const updatedEscrow = await escrowRepository.findOne({
+        where: { id: savedEscrow.id },
       });
-      
+
       expect(updatedEscrow?.status).toBe(EscrowStatus.DISPUTED);
     });
 
@@ -212,12 +215,12 @@ describe('Escrow Scheduler (e2e)', () => {
 
       // Verify all escrows were cancelled
       const updatedEscrows = await escrowRepository.find({
-        where: { 
-          id: In(savedEscrows.map(e => e.id)) 
+        where: {
+          id: In(savedEscrows.map((e) => e.id)),
         },
       });
 
-      updatedEscrows.forEach(escrow => {
+      updatedEscrows.forEach((escrow) => {
         expect(escrow.status).toBe(EscrowStatus.CANCELLED);
         expect(escrow.isActive).toBe(false);
       });

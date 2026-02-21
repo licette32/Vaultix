@@ -21,11 +21,11 @@ export class EscrowSchedulerService {
   @Cron(CronExpression.EVERY_HOUR)
   async handleExpiredEscrows() {
     this.logger.log('Starting expired escrow processing...');
-    
+
     try {
       await this.processExpiredPendingEscrows();
       await this.processExpiredActiveEscrows();
-      
+
       this.logger.log('Completed expired escrow processing');
     } catch (error) {
       this.logger.error('Error processing expired escrows:', error);
@@ -35,7 +35,7 @@ export class EscrowSchedulerService {
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async sendExpirationWarnings() {
     this.logger.log('Sending 24-hour expiration warnings...');
-    
+
     try {
       await this.processExpirationWarnings();
       this.logger.log('Completed expiration warnings');
@@ -46,7 +46,7 @@ export class EscrowSchedulerService {
 
   private async processExpiredPendingEscrows() {
     const now = new Date();
-    
+
     const expiredPendingEscrows = await this.escrowRepository.find({
       where: {
         status: EscrowStatus.PENDING,
@@ -56,7 +56,9 @@ export class EscrowSchedulerService {
       relations: ['creator', 'parties', 'parties.user'],
     });
 
-    this.logger.log(`Found ${expiredPendingEscrows.length} expired pending escrows`);
+    this.logger.log(
+      `Found ${expiredPendingEscrows.length} expired pending escrows`,
+    );
 
     for (const escrow of expiredPendingEscrows) {
       try {
@@ -69,7 +71,7 @@ export class EscrowSchedulerService {
 
   private async processExpiredActiveEscrows() {
     const now = new Date();
-    
+
     const expiredActiveEscrows = await this.escrowRepository.find({
       where: {
         status: EscrowStatus.ACTIVE,
@@ -79,13 +81,18 @@ export class EscrowSchedulerService {
       relations: ['creator', 'parties', 'parties.user'],
     });
 
-    this.logger.log(`Found ${expiredActiveEscrows.length} expired active escrows`);
+    this.logger.log(
+      `Found ${expiredActiveEscrows.length} expired active escrows`,
+    );
 
     for (const escrow of expiredActiveEscrows) {
       try {
         await this.escalateToDispute(escrow);
       } catch (error) {
-        this.logger.error(`Failed to escalate escrow ${escrow.id} to dispute:`, error);
+        this.logger.error(
+          `Failed to escalate escrow ${escrow.id} to dispute:`,
+          error,
+        );
       }
     }
   }
@@ -93,11 +100,11 @@ export class EscrowSchedulerService {
   private async processExpirationWarnings() {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const warningThreshold = new Date();
     warningThreshold.setDate(warningThreshold.getDate() + 1);
     warningThreshold.setHours(0, 0, 0, 0);
-    
+
     const escrowsNeedingWarning = await this.escrowRepository.find({
       where: {
         status: In([EscrowStatus.PENDING, EscrowStatus.ACTIVE]),
@@ -108,13 +115,18 @@ export class EscrowSchedulerService {
       relations: ['creator', 'parties', 'parties.user'],
     });
 
-    this.logger.log(`Found ${escrowsNeedingWarning.length} escrows needing expiration warnings`);
+    this.logger.log(
+      `Found ${escrowsNeedingWarning.length} escrows needing expiration warnings`,
+    );
 
     for (const escrow of escrowsNeedingWarning) {
       try {
         await this.sendExpirationWarning(escrow);
       } catch (error) {
-        this.logger.error(`Failed to send warning for escrow ${escrow.id}:`, error);
+        this.logger.error(
+          `Failed to send warning for escrow ${escrow.id}:`,
+          error,
+        );
       }
     }
   }
@@ -124,7 +136,7 @@ export class EscrowSchedulerService {
 
     escrow.status = EscrowStatus.CANCELLED;
     escrow.isActive = false;
-    
+
     await this.escrowRepository.save(escrow);
 
     await this.escrowEventRepository.save({
@@ -137,7 +149,7 @@ export class EscrowSchedulerService {
       },
     });
 
-    await this.notifyParties(escrow, 'ESCROW_AUTO_CANCELLED', {
+    void this.notifyParties(escrow, 'ESCROW_AUTO_CANCELLED', {
       reason: 'Escrow expired while pending',
       expiredAt: escrow.expiresAt,
     });
@@ -146,10 +158,12 @@ export class EscrowSchedulerService {
   }
 
   private async escalateToDispute(escrow: Escrow) {
-    this.logger.log(`Escalating expired active escrow to dispute: ${escrow.id}`);
+    this.logger.log(
+      `Escalating expired active escrow to dispute: ${escrow.id}`,
+    );
 
     escrow.status = EscrowStatus.DISPUTED;
-    
+
     await this.escrowRepository.save(escrow);
 
     await this.escrowEventRepository.save({
@@ -162,7 +176,7 @@ export class EscrowSchedulerService {
       },
     });
 
-    await this.notifyParties(escrow, 'ESCROW_ESCALATED_TO_DISPUTE', {
+    void this.notifyParties(escrow, 'ESCROW_ESCALATED_TO_DISPUTE', {
       reason: 'Escrow expired while active',
       expiredAt: escrow.expiresAt,
       requiresArbitration: true,
@@ -186,16 +200,22 @@ export class EscrowSchedulerService {
       },
     });
 
-    await this.notifyParties(escrow, 'ESCROW_EXPIRING_SOON', {
+    void this.notifyParties(escrow, 'ESCROW_EXPIRING_SOON', {
       expiresAt: escrow.expiresAt,
       hoursUntilExpiry: this.getHoursUntilExpiry(escrow.expiresAt!),
     });
 
-    this.logger.log(`Successfully sent expiration warning for escrow: ${escrow.id}`);
+    this.logger.log(
+      `Successfully sent expiration warning for escrow: ${escrow.id}`,
+    );
   }
 
-  private async notifyParties(escrow: Escrow, eventType: string, data: any) {
-    const notifications = escrow.parties.map(party => ({
+  private notifyParties(
+    escrow: Escrow,
+    eventType: string,
+    data: Record<string, unknown>,
+  ) {
+    const notifications = escrow.parties.map((party) => ({
       walletAddress: party.user.walletAddress,
       type: eventType,
       data: {
@@ -205,19 +225,26 @@ export class EscrowSchedulerService {
       },
     }));
 
-    this.logger.log(`Sending ${notifications.length} notifications for escrow ${escrow.id}`);
-    
+    this.logger.log(
+      `Sending ${notifications.length} notifications for escrow ${escrow.id}`,
+    );
+
     for (const notification of notifications) {
       try {
-        await this.sendWebhookNotification(notification);
+        void this.sendWebhookNotification(notification);
       } catch (error) {
-        this.logger.error(`Failed to send notification to ${notification.walletAddress}:`, error);
+        this.logger.error(
+          `Failed to send notification to ${notification.walletAddress}:`,
+          error,
+        );
       }
     }
   }
 
-  private async sendWebhookNotification(notification: any) {
-    this.logger.log(`Sending webhook notification: ${JSON.stringify(notification)}`);
+  private sendWebhookNotification(notification: Record<string, unknown>) {
+    this.logger.log(
+      `Sending webhook notification: ${JSON.stringify(notification)}`,
+    );
   }
 
   private getHoursUntilExpiry(expiresAt: Date): number {
@@ -250,7 +277,9 @@ export class EscrowSchedulerService {
     } else if (escrow.status === EscrowStatus.ACTIVE) {
       await this.escalateToDispute(escrow);
     } else {
-      this.logger.log(`Escrow ${escrowId} already processed with status: ${escrow.status}`);
+      this.logger.log(
+        `Escrow ${escrowId} already processed with status: ${escrow.status}`,
+      );
     }
   }
 }

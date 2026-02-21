@@ -5,7 +5,6 @@ import {
   UseGuards,
   HttpStatus,
   HttpCode,
-  Get,
 } from '@nestjs/common';
 import { AuthGuard } from '../../auth/middleware/auth.guard';
 import { AdminGuard } from '../../auth/middleware/admin.guard';
