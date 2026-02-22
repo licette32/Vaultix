@@ -16,6 +16,7 @@ import { ListEscrowsDto, SortOrder } from '../dto/list-escrows.dto';
 import { CancelEscrowDto } from '../dto/cancel-escrow.dto';
 import { validateTransition, isTerminalStatus } from '../escrow-state-machine';
 import { EscrowStellarIntegrationService } from './escrow-stellar-integration.service';
+import { WebhookService } from '../../../services/webhook/webhook.service';
 
 @Injectable()
 export class EscrowService {
@@ -30,6 +31,7 @@ export class EscrowService {
     private eventRepository: Repository<EscrowEvent>,
 
     private readonly stellarIntegrationService: EscrowStellarIntegrationService,
+    private readonly webhookService: WebhookService,
   ) {}
 
   async create(
@@ -70,6 +72,7 @@ export class EscrowService {
       await this.conditionRepository.save(conditions);
     }
 
+
     await this.logEvent(
       savedEscrow.id,
       EscrowEventType.CREATED,
@@ -77,6 +80,9 @@ export class EscrowService {
       { dto },
       ipAddress,
     );
+
+    // Dispatch webhook for escrow.created
+    await this.webhookService.dispatchEvent('escrow.created', { escrowId: savedEscrow.id });
 
     return this.findOne(savedEscrow.id);
   }
@@ -163,6 +169,7 @@ export class EscrowService {
 
     await this.escrowRepository.update(id, updateData);
 
+
     await this.logEvent(
       id,
       EscrowEventType.UPDATED,
@@ -170,6 +177,7 @@ export class EscrowService {
       { changes: dto },
       ipAddress,
     );
+    // Optionally dispatch webhook for escrow update
 
     return this.findOne(id);
   }
@@ -209,6 +217,7 @@ export class EscrowService {
 
     await this.escrowRepository.update(id, { status: EscrowStatus.CANCELLED });
 
+
     await this.logEvent(
       id,
       EscrowEventType.CANCELLED,
@@ -216,6 +225,7 @@ export class EscrowService {
       { reason: dto.reason, previousStatus: escrow.status },
       ipAddress,
     );
+    await this.webhookService.dispatchEvent('escrow.cancelled', { escrowId: id });
 
     return this.findOne(id);
   }
@@ -293,9 +303,11 @@ export class EscrowService {
 
     await this.escrowRepository.save(escrow);
 
+
     await this.logEvent(escrow.id, EscrowEventType.COMPLETED, currentUserId, {
       txHash,
     });
+    await this.webhookService.dispatchEvent('escrow.released', { escrowId: escrow.id, txHash });
 
     return escrow;
   }
