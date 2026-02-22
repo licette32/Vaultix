@@ -18,7 +18,6 @@ describe('Escrow Scheduler (e2e)', () => {
   let partyRepository: Repository<Party>;
 
   let adminToken: string;
-  let testUser: User;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -57,28 +56,32 @@ describe('Escrow Scheduler (e2e)', () => {
 
   describe('Manual Escrow Processing', () => {
     it('should auto-cancel expired pending escrow', async () => {
-      await request(app.getHttpServer())
+      const server = app.getHttpServer() as unknown as import('http').Server;
+      await request(server)
         .post(`/escrows/scheduler/process/ESCROW_ID`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
     });
 
     it('should escalate expired active escrow to dispute', async () => {
-      await request(app.getHttpServer())
+      const server = app.getHttpServer() as unknown as import('http').Server;
+      await request(server)
         .post(`/escrows/scheduler/process/ESCROW_ID`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
     });
 
     it('should not process non-expired escrow', async () => {
-      await request(app.getHttpServer())
+      const server = app.getHttpServer() as unknown as import('http').Server;
+      await request(server)
         .post(`/escrows/scheduler/process/ESCROW_ID`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(400);
     });
 
     it('should handle non-existent escrow', async () => {
-      await request(app.getHttpServer())
+      const server = app.getHttpServer() as unknown as import('http').Server;
+      await request(server)
         .post('/escrows/scheduler/process/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(400);
@@ -87,7 +90,8 @@ describe('Escrow Scheduler (e2e)', () => {
 
   describe('Batch Processing', () => {
     it('should process all expired escrows', async () => {
-      await request(app.getHttpServer())
+      const server = app.getHttpServer() as unknown as import('http').Server;
+      await request(server)
         .post('/escrows/scheduler/process-expired')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
@@ -96,14 +100,16 @@ describe('Escrow Scheduler (e2e)', () => {
 
   describe('Access Control', () => {
     it('should forbid access for non-admin users', async () => {
-      await request(app.getHttpServer())
+      const server = app.getHttpServer() as unknown as import('http').Server;
+      await request(server)
         .post('/escrows/scheduler/process-expired')
         .set('Authorization', 'Bearer user-token')
         .expect(403);
     });
 
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
+      const server = app.getHttpServer() as unknown as import('http').Server;
+      await request(server)
         .post('/escrows/scheduler/process-expired')
         .expect(401);
     });
