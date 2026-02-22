@@ -74,13 +74,11 @@ describe('Escrow (e2e)', () => {
     const message = (challengeResponse.body as { message: string }).message;
     const signature = testKeypair.sign(message).toString('hex');
 
-    const verifyResponse = await request(httpServer)
-      .post('/auth/verify')
-      .send({
-        walletAddress: testWalletAddress,
-        signature: signature,
-        publicKey: testWalletAddress,
-      });
+    const verifyResponse = await request(httpServer).post('/auth/verify').send({
+      walletAddress: testWalletAddress,
+      signature: signature,
+      publicKey: testWalletAddress,
+    });
 
     accessToken = (verifyResponse.body as { accessToken: string }).accessToken;
 

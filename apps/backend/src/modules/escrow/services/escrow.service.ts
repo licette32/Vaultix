@@ -72,7 +72,6 @@ export class EscrowService {
       await this.conditionRepository.save(conditions);
     }
 
-
     await this.logEvent(
       savedEscrow.id,
       EscrowEventType.CREATED,
@@ -82,7 +81,9 @@ export class EscrowService {
     );
 
     // Dispatch webhook for escrow.created
-    await this.webhookService.dispatchEvent('escrow.created', { escrowId: savedEscrow.id });
+    await this.webhookService.dispatchEvent('escrow.created', {
+      escrowId: savedEscrow.id,
+    });
 
     return this.findOne(savedEscrow.id);
   }
@@ -169,7 +170,6 @@ export class EscrowService {
 
     await this.escrowRepository.update(id, updateData);
 
-
     await this.logEvent(
       id,
       EscrowEventType.UPDATED,
@@ -217,7 +217,6 @@ export class EscrowService {
 
     await this.escrowRepository.update(id, { status: EscrowStatus.CANCELLED });
 
-
     await this.logEvent(
       id,
       EscrowEventType.CANCELLED,
@@ -225,7 +224,9 @@ export class EscrowService {
       { reason: dto.reason, previousStatus: escrow.status },
       ipAddress,
     );
-    await this.webhookService.dispatchEvent('escrow.cancelled', { escrowId: id });
+    await this.webhookService.dispatchEvent('escrow.cancelled', {
+      escrowId: id,
+    });
 
     return this.findOne(id);
   }
@@ -303,11 +304,13 @@ export class EscrowService {
 
     await this.escrowRepository.save(escrow);
 
-
     await this.logEvent(escrow.id, EscrowEventType.COMPLETED, currentUserId, {
       txHash,
     });
-    await this.webhookService.dispatchEvent('escrow.released', { escrowId: escrow.id, txHash });
+    await this.webhookService.dispatchEvent('escrow.released', {
+      escrowId: escrow.id,
+      txHash,
+    });
 
     return escrow;
   }

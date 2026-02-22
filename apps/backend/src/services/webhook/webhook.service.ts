@@ -1,8 +1,16 @@
-import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Webhook } from '../../modules/webhook/webhook.entity';
-import { WebhookEvent, WebhookPayload } from '../../types/webhook/webhook.types';
+import {
+  WebhookEvent,
+  WebhookPayload,
+} from '../../types/webhook/webhook.types';
 import * as crypto from 'crypto';
 import axios from 'axios';
 
@@ -15,9 +23,20 @@ export class WebhookService {
     private readonly webhookRepo: Repository<Webhook>,
   ) {}
 
-  async createWebhook(userId: string, url: string, secret: string, events: WebhookEvent[]): Promise<Webhook> {
+  async createWebhook(
+    userId: string,
+    url: string,
+    secret: string,
+    events: WebhookEvent[],
+  ): Promise<Webhook> {
     // TODO: Add rate limiting logic here
-    const webhook = this.webhookRepo.create({ url, secret, events, user: { id: userId }, isActive: true });
+    const webhook = this.webhookRepo.create({
+      url,
+      secret,
+      events,
+      user: { id: userId },
+      isActive: true,
+    });
     return this.webhookRepo.save(webhook);
   }
 
@@ -26,23 +45,36 @@ export class WebhookService {
   }
 
   async deleteWebhook(userId: string, webhookId: string): Promise<void> {
-    const webhook = await this.webhookRepo.findOne({ where: { id: webhookId }, relations: ['user'] });
+    const webhook = await this.webhookRepo.findOne({
+      where: { id: webhookId },
+      relations: ['user'],
+    });
     if (!webhook) throw new NotFoundException('Webhook not found');
-    if (webhook.user.id !== userId) throw new ForbiddenException('Not your webhook');
+    if (webhook.user.id !== userId)
+      throw new ForbiddenException('Not your webhook');
     await this.webhookRepo.delete(webhookId);
   }
 
-  async dispatchEvent(event: WebhookEvent, data: any): Promise<void> {
+  async dispatchEvent(event: WebhookEvent, data: unknown): Promise<void> {
     const webhooks = await this.webhookRepo.find({ where: { isActive: true } });
-    const payload: WebhookPayload = { event, data, timestamp: new Date().toISOString() };
+    const payload: WebhookPayload = {
+      event,
+      data,
+      timestamp: new Date().toISOString(),
+    };
     for (const webhook of webhooks) {
       if (webhook.events.includes(event)) {
-        this.deliverWebhook(webhook, payload);
+        // Await the promise or handle it properly
+        void this.deliverWebhook(webhook, payload);
       }
     }
   }
 
-  async deliverWebhook(webhook: Webhook, payload: WebhookPayload, attempt = 1): Promise<void> {
+  async deliverWebhook(
+    webhook: Webhook,
+    payload: WebhookPayload,
+    attempt = 1,
+  ): Promise<void> {
     const maxAttempts = 5;
     const backoff = Math.pow(2, attempt) * 1000;
     const signature = this.signPayload(webhook.secret, payload);
@@ -55,12 +87,23 @@ export class WebhookService {
         timeout: 5000,
       });
       this.logger.log(`Webhook delivered to ${webhook.url}`);
-    } catch (err) {
-      this.logger.warn(`Webhook delivery failed (attempt ${attempt}) to ${webhook.url}: ${err.message}`);
+    } catch (err: unknown) {
+      let errorMsg = 'Unknown error';
+      if (typeof err === 'object' && err !== null && 'message' in err) {
+        errorMsg = (err as { message?: string }).message ?? errorMsg;
+      }
+      this.logger.warn(
+        `Webhook delivery failed (attempt ${attempt}) to ${webhook.url}: ${errorMsg}`,
+      );
       if (attempt < maxAttempts) {
-        setTimeout(() => this.deliverWebhook(webhook, payload, attempt + 1), backoff);
+        setTimeout(
+          () => void this.deliverWebhook(webhook, payload, attempt + 1),
+          backoff,
+        );
       } else {
-        this.logger.error(`Webhook delivery permanently failed to ${webhook.url}`);
+        this.logger.error(
+          `Webhook delivery permanently failed to ${webhook.url}`,
+        );
       }
     }
   }
@@ -71,8 +114,15 @@ export class WebhookService {
     return hmac.digest('hex');
   }
 
-  verifySignature(secret: string, payload: WebhookPayload, signature: string): boolean {
+  verifySignature(
+    secret: string,
+    payload: WebhookPayload,
+    signature: string,
+  ): boolean {
     const expected = this.signPayload(secret, payload);
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected),
+    );
   }
 }
