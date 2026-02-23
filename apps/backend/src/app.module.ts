@@ -5,7 +5,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
-import { EscrowModule } from './modules/escrow/escrow.module';
 import { StellarModule } from './modules/stellar/stellar.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { WebhookModule } from './modules/webhook/webhook.module';
@@ -15,6 +14,10 @@ import { Escrow } from './modules/escrow/entities/escrow.entity';
 import { Party } from './modules/escrow/entities/party.entity';
 import { Condition } from './modules/escrow/entities/condition.entity';
 import { EscrowEvent } from './modules/escrow/entities/escrow-event.entity';
+import { NotificationsModule } from './notifications/notifications.module';
+import { EscrowModule } from './escrow/escrow.module';
+import { ApiKeyModule } from './api-key/api-key.module';
+import { StellarEventModule } from './modules/stellar/stellar-event.module';
 
 @Module({
   imports: [
@@ -40,6 +43,9 @@ import { EscrowEvent } from './modules/escrow/entities/escrow-event.entity';
     StellarModule,
     AdminModule,
     WebhookModule,
+    NotificationsModule,
+    ApiKeyModule,
+    StellarEventModule,
   ],
   controllers: [AppController],
   providers: [AppService],
