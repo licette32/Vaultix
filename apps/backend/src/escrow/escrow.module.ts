@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { EscrowService } from './escrow.service';
-import { EscrowController } from './escrow.controller';
+import { EscrowController } from 'src/modules/escrow/controllers/escrow.controller';
+import { EscrowService } from 'src/modules/escrow/services/escrow.service';
 
 @Module({
   controllers: [EscrowController],
