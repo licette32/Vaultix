@@ -170,13 +170,14 @@ fn test_create_and_get_escrow() {
     let events = env.events().all();
     let event = events.last().unwrap();
     assert_eq!(event.0, contract_id);
-    
+
     // Topics assertion: Convert tuple to Vec<Val>
     let expected_topics: soroban_sdk::Vec<soroban_sdk::Val> = (
         Symbol::new(&env, "Vaultix"),
         Symbol::new(&env, "EscrowCreated"),
-        escrow_id
-    ).into_val(&env);
+        escrow_id,
+    )
+        .into_val(&env);
     assert_eq!(event.1, expected_topics);
 
     // Payload assertion: Convert event.2 into a Vec<Val> and compare with expected Vec<Val>
