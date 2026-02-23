@@ -10,7 +10,7 @@ describe('StellarEventListenerService', () => {
   let service: StellarEventListenerService;
   let stellarEventRepository: Repository<StellarEvent>;
   let escrowRepository: Repository<Escrow>;
-  let configService: ConfigService;
+  let configService: any;
 
   const mockConfigService = {
     get: jest.fn(),
@@ -21,7 +21,7 @@ describe('StellarEventListenerService', () => {
       providers: [
         StellarEventListenerService,
         {
-          provide: ConfigService,
+          provide: 'ConfigService',
           useValue: mockConfigService,
         },
         {
@@ -45,7 +45,7 @@ describe('StellarEventListenerService', () => {
     service = module.get<StellarEventListenerService>(StellarEventListenerService);
     stellarEventRepository = module.get('StellarEventRepository');
     escrowRepository = module.get('EscrowRepository');
-    configService = module.get<ConfigService>(ConfigService);
+    configService = module.get('ConfigService');
   });
 
   describe('mapEventType', () => {
