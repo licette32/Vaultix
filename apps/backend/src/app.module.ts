@@ -5,7 +5,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
-import { EscrowModule } from './modules/escrow/escrow.module';
 import { StellarModule } from './modules/stellar/stellar.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { WebhookModule } from './modules/webhook/webhook.module';
@@ -18,7 +17,7 @@ import { EscrowEvent } from './modules/escrow/entities/escrow-event.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EscrowModule } from './escrow/escrow.module';
 import { ApiKeyModule } from './api-key/api-key.module';
-import { StellarEvent } from './modules/stellar/entities/stellar-event.entity';
+import { StellarEventModule } from './modules/stellar/stellar-event.module';
 
 @Module({
   imports: [
