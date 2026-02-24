@@ -19,6 +19,7 @@ import { CreateEscrowDto } from '../dto/create-escrow.dto';
 import { UpdateEscrowDto } from '../dto/update-escrow.dto';
 import { ListEscrowsDto } from '../dto/list-escrows.dto';
 import { CancelEscrowDto } from '../dto/cancel-escrow.dto';
+import { FileDisputeDto, ResolveDisputeDto } from '../dto/dispute.dto';
 
 interface AuthenticatedRequest extends ExpressRequest {
   user: { sub: string; walletAddress: string };
@@ -95,5 +96,47 @@ export class EscrowController {
       status: escrow.status,
       transactionHash: escrow.releaseTransactionHash,
     };
+  }
+
+  /**
+   * POST /escrows/:id/dispute
+   * File a dispute against an active escrow. Only a buyer or seller party may call this.
+   * Transitions the escrow from ACTIVE → DISPUTED and freezes fund release.
+   */
+  @Post(':id/dispute')
+  @UseGuards(EscrowAccessGuard)
+  async fileDispute(
+    @Param('id') id: string,
+    @Body() dto: FileDisputeDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const ipAddress = req.ip || req.socket?.remoteAddress;
+    return this.escrowService.fileDispute(id, req.user.sub, dto, ipAddress);
+  }
+
+  /**
+   * GET /escrows/:id/dispute
+   * Retrieve the dispute record for an escrow. Accessible to any party on the escrow.
+   */
+  @Get(':id/dispute')
+  @UseGuards(EscrowAccessGuard)
+  async getDispute(@Param('id') id: string) {
+    return this.escrowService.getDispute(id);
+  }
+
+  /**
+   * POST /escrows/:id/dispute/resolve
+   * Resolve an open dispute. Only an assigned arbitrator party may call this.
+   * Transitions the escrow from DISPUTED → COMPLETED (release/split) or CANCELLED (refund).
+   */
+  @Post(':id/dispute/resolve')
+  @UseGuards(EscrowAccessGuard)
+  async resolveDispute(
+    @Param('id') id: string,
+    @Body() dto: ResolveDisputeDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const ipAddress = req.ip || req.socket?.remoteAddress;
+    return this.escrowService.resolveDispute(id, req.user.sub, dto, ipAddress);
   }
 }
