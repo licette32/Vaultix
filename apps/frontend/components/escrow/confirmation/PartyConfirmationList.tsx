@@ -79,7 +79,9 @@ const PartyConfirmationList: React.FC<PartyListProps> = ({ parties, currentUserA
                 </div>
                 
                 {party.message ? (
-                  <p className="text-sm text-gray-400 italic">"{party.message}"</p>
+                  <p className="text-sm text-gray-400 italic">
+                    &quot;{party.message}&quot;
+                  </p>
                 ) : (
                   <p className="text-sm text-gray-500">
                     {party.hasConfirmed ? "Confirmed" : "Awaiting signature..."}

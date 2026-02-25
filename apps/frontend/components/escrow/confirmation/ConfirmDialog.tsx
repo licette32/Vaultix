@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from "react";
-import { Role } from "./TestPi";
 import { AlertCircle, FileSignature, Loader2, X } from "lucide-react";
+import { Role } from "./ConfirmationSection";
 
 interface ConfirmDialogProps {
   isOpen: boolean;

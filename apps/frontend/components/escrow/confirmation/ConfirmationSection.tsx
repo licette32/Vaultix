@@ -1,17 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState} from "react";
 import {
   CheckCircle2,
-  Clock,
-  Shield,
-  Briefcase,
-  User,
-  Wallet,
-  Loader2,
-  X,
   FileSignature,
-  AlertCircle
 } from "lucide-react";
 import ConfirmDialog from "./ConfirmDialog";
 import PartyConfirmationList from "./PartyConfirmationList";
