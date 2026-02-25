@@ -20,6 +20,7 @@ import { UpdateEscrowDto } from '../dto/update-escrow.dto';
 import { ListEscrowsDto } from '../dto/list-escrows.dto';
 import { ListEventsDto } from '../dto/list-events.dto';
 import { CancelEscrowDto } from '../dto/cancel-escrow.dto';
+import { FulfillConditionDto } from '../dto/fulfill-condition.dto';
 import { FileDisputeDto, ResolveDisputeDto } from '../dto/dispute.dto';
 
 interface AuthenticatedRequest extends ExpressRequest {
@@ -108,6 +109,42 @@ export class EscrowController {
       status: escrow.status,
       transactionHash: escrow.releaseTransactionHash,
     };
+  }
+
+  @Post(':id/conditions/:conditionId/fulfill')
+  @UseGuards(EscrowAccessGuard)
+  async fulfillCondition(
+    @Param('id') escrowId: string,
+    @Param('conditionId') conditionId: string,
+    @Body() dto: FulfillConditionDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const userId = req.user.sub;
+    const ipAddress = req.ip || req.socket?.remoteAddress;
+    return this.escrowService.fulfillCondition(
+      escrowId,
+      conditionId,
+      dto,
+      userId,
+      ipAddress,
+    );
+  }
+
+  @Post(':id/conditions/:conditionId/confirm')
+  @UseGuards(EscrowAccessGuard)
+  async confirmCondition(
+    @Param('id') escrowId: string,
+    @Param('conditionId') conditionId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const userId = req.user.sub;
+    const ipAddress = req.ip || req.socket?.remoteAddress;
+    return this.escrowService.confirmCondition(
+      escrowId,
+      conditionId,
+      userId,
+      ipAddress,
+    );
   }
 
   /**
