@@ -1,16 +1,14 @@
 "use client";
 
 import "react";
-import { use, useState } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
-import axios from "../../../../backend/src/clients/client";
-import { i, u } from "framer-motion/client";
-import client from "../../../../backend/src/clients/client";
+import axios from "axios";
 
 interface FileDisputeModalProps {
   open: boolean;
